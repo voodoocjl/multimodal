@@ -6,7 +6,7 @@ import csv
 import numpy as np
 import torch
 from Node import Node
-from ChemModel import translator
+from FusionModel import translator
 from schemes import chemistry
 import time
 from sampling import sampling_node
