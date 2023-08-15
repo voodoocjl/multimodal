@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from Node import Node
 from FusionModel import translator
-from schemes import chemistry
+from schemes import Scheme
 import time
 from sampling import sampling_node
 
@@ -171,7 +171,7 @@ class MCTS:
                     report = {'energy': dataset.get(job_str)}
                     # print(report)
                 else:
-                    report = chemistry(design)
+                    report = Scheme(design)
                     
                 maeinv = -1 * report['energy']
     

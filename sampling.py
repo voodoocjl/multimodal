@@ -6,8 +6,8 @@ import csv
 import numpy as np
 import torch
 from Node import Node
-from ChemModel import translator
-from schemes import chemistry
+from FusionModel import translator
+from schemes import Scheme
 
 
 def num2ord(num):
@@ -130,7 +130,7 @@ def sampling_node(agent, nodes, dataset, iteration, verbose = None):
             if str(sampled_arch) in dataset:
                 report = {'energy': dataset.get(str(sampled_arch))}               
             else:
-                report = chemistry(design)
+                report = Scheme(design)
             if verbose:
                 print("\nstart training:")
                 print("\nsampled from node", j)
