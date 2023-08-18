@@ -39,13 +39,13 @@ class Enco_Conv_Net(nn.Module):
     def __init__(self, n_channels, output_dim):
         super(Enco_Conv_Net, self).__init__()
         hidden_chanels = 64
-        self.features_2x4 = nn.Sequential(
-            nn.Conv2d(1, hidden_chanels, kernel_size= (2, 4)),
+        self.features_3x3 = nn.Sequential(
+            nn.Conv2d(1, hidden_chanels, kernel_size= (3, 3)),
             nn.ReLU(),
-            # nn.MaxPool2d(2,2)            
+            nn.MaxPool2d(2,2)            
             )
         self.dropout = nn.Dropout2d(p=0.5)
-        self.pool1d = nn.MaxPool1d(2, 2)
+        self.pool1d = nn.MaxPool1d(3, 3)
         self.features_2x2 = nn.Sequential(
             nn.Conv2d(hidden_chanels, n_channels, kernel_size = 2),
             nn.ReLU(),
@@ -55,17 +55,32 @@ class Enco_Conv_Net(nn.Module):
 
     def forward(self, x):
         # x = transform(x)
-        x1 = self.features_2x4(x)
+        x1 = self.features_3x3(x)
         x1 = self.dropout(x1)
         x2 = self.features_2x2(x1)
-        x2 = self.pool1d(x2.squeeze(2))
+        # x2 = self.pool1d(x2.squeeze(2))
         # x1 = x1.flatten(1)        
         x2 = x2.flatten(1)
+        # print(x2.shape)
         # x_ = torch.cat((x1, x2), 1)
         y = self.classifier(x2)
         y[:,-1] = torch.sigmoid(y[:,-1])
         return y
 
+class Attention(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        super(Attention, self).__init__()
+        self.attention = nn.MultiheadAttention(input_size, 1)
+        self.linear = nn.Linear(input_size, hidden_size)
+        self.classifier = nn.Linear(35, 64, 1)
+
+    def forward(self, x):        #(batch, seq, feature)
+        x = x.permute(1, 0, 2)   #(seq, batch, feature)
+        out, _ = self.attention(x, x, x)
+        out = out.permute(1, 0, 2)
+        out = self.linear(out)
+        out = torch.sigmoid(self.classifier(out.flatten(1)))
+        return out   
 # set random seed
 seed = 42
 random.seed(seed)
@@ -97,7 +112,7 @@ def change_code(x):
         x_ = torch.cat((x_, elem_.unsqueeze(0)))
     return x_
 
-def transform(x, repeat = [1, 1]):
+def transform_2d(x, repeat = [1, 1]):
     x = change_code(x)    
     # single_type = x[:, :7].unsqueeze(1)
     # entangle_type = x[:, 7:14].unsqueeze(1)
@@ -114,6 +129,29 @@ def transform(x, repeat = [1, 1]):
         x = torch.cat((x, x_1), 2)
     return x.unsqueeze(1)
 
+def transform_attention(x, repeat = [1, 1]):
+    x = change_code(x)    
+    x = x.reshape(-1, 3, 7)
+    x_1 = x
+    for i in range(repeat[0] -1):
+        x_1 = torch.cat((x_1, x), 1)
+    x = x_1
+    for i in range(repeat[1] -1):
+        x = torch.cat((x, x_1), 2)
+    return x
+
+def positional_encoding(max_len, d_model):
+    pos = torch.arange(max_len).unsqueeze(1)
+    i = torch.arange(d_model).unsqueeze(0)
+    angle_rates = 1 / torch.pow(10000, (2 * torch.div(i, 2, rounding_mode='floor')) / d_model)
+    angle_rads = pos * angle_rates
+    sines = torch.sin(angle_rads[:, 0::2])
+    cosines = torch.cos(angle_rads[:, 1::2])
+    pos_encoding = torch.cat([sines, cosines], dim=-1)
+    return pos_encoding
+
+pos = positional_encoding(35, 3)
+
 with open('data/mosi_dataset', 'rb') as file:
     dataset = pickle.load(file)
 
@@ -123,10 +161,11 @@ for key in dataset:
     energy.append(dataset[key])
 arch_code = torch.from_numpy(np.asarray(arch_code, dtype=np.float32))
 energy =  torch.from_numpy(np.asarray(energy, dtype=np.float32))
-arch_code = transform(arch_code)
+arch_code = transform_attention(arch_code, [1, 5])   # 5 layers
+arch_code = arch_code.transpose(1, 2) + pos
 
 true_label = get_label(energy)
-t_size = 10000
+t_size = 8000
 arch_code_train = arch_code[:t_size]
 energy_train = energy[:t_size]
 label = get_label(energy_train)
@@ -151,65 +190,65 @@ print("dataset size: ", len(energy))
 print("training size: ", len(energy_train))
 print("test size: ", len(arch_code_test))
 
-for channel in range(1, 10, 2):
-    model = Enco_Conv_Net(channel, 1)
-    # model = Encoder(19, 100, 1)
-    if torch.cuda.is_available():
-        model.cuda()    
-    loss_fn = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+# for channel in range(1, 10, 2):
+model = Attention(3, 1)
+# model = Encoder(19, 100, 1)
+if torch.cuda.is_available():
+    model.cuda()    
+loss_fn = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+
+train_loss_list, test_loss_list = [], []
+s = time.time()
+for epoch in range(1, 3001):
+    for x, y in dataloader:
+        model.train()
+        pred = model(x) 
+
+        loss_e = loss_fn(pred[:, -1], y)            
+        train_loss = loss_e #+ 0.1 * loss_s            
+        optimizer.zero_grad()
+        train_loss.backward()
+        optimizer.step()        
+
+    if epoch % 500 == 0:
+        model.eval()
+        with torch.no_grad():
+            pred = model(arch_code_train).cpu()
+            # error = (pred[:,-1] - energy_train).abs().mean()
+            # pred_label = get_label(pred[:, -1])
+            pred_label = (pred[:, -1] > 0.5).float()
+            label = label.cpu()
+            acc = accuracy_score(pred_label.numpy(), label.numpy())
+            # acc = f1_score(label, pred_label)
+            print(epoch, acc)
+            train_loss_list.append(acc)
     
-    train_loss_list, test_loss_list = [], []
-    s = time.time()
-    for epoch in range(1, 3001):
-        for x, y in dataloader:
-            model.train()
-            pred = model(x) 
+model.eval()
+with torch.no_grad():
+    pred = model(arch_code_test).cpu()
+    pred_label = (pred[:, -1] > 0.5).float()
+    test_label = test_label.cpu()
+    acc = accuracy_score(pred_label.numpy(), test_label.numpy())
+    # acc = f1_score(test_label, pred_label)
+    print("test acc:", acc)
+    # train_loss_list.append(acc)
+e = time.time()
+print('time: ', e-s)
 
-            loss_e = loss_fn(pred[:, -1], y)            
-            train_loss = loss_e #+ 0.1 * loss_s            
-            optimizer.zero_grad()
-            train_loss.backward()
-            optimizer.step()        
+model.eval()
+with torch.no_grad():
+    pred = model(arch_code_test).cpu()      
+    pred_label = (pred[:, -1] > 0.5).float()
+    test_label = test_label.cpu()
+    acc = accuracy_score(pred_label.numpy(), test_label.numpy())
+    # acc = f1_score(test_label, pred_label)
+    print("test acc:", acc)
+    train_loss_list.append(acc)
+print(train_loss_list)
 
-        if epoch % 500 == 0:
-            model.eval()
-            with torch.no_grad():
-                pred = model(arch_code_train).cpu()
-                # error = (pred[:,-1] - energy_train).abs().mean()
-                # pred_label = get_label(pred[:, -1])
-                pred_label = (pred[:, -1] > 0.5).float()
-                label = label.cpu()
-                acc = accuracy_score(pred_label.numpy(), label.numpy())
-                # acc = f1_score(label, pred_label)
-                print(epoch, acc)
-                train_loss_list.append(acc)
-        
-    model.eval()
-    with torch.no_grad():
-        pred = model(arch_code_test).cpu()
-        pred_label = (pred[:, -1] > 0.5).float()
-        test_label = test_label.cpu()
-        acc = accuracy_score(pred_label.numpy(), test_label.numpy())
-        # acc = f1_score(test_label, pred_label)
-        print("test acc:", acc)
-        # train_loss_list.append(acc)
-    e = time.time()
-    print('time: ', e-s)
-
-    model.eval()
-    with torch.no_grad():
-        pred = model(arch_code_test).cpu()      
-        pred_label = (pred[:, -1] > 0.5).float()
-        test_label = test_label.cpu()
-        acc = accuracy_score(pred_label.numpy(), test_label.numpy())
-        # acc = f1_score(test_label, pred_label)
-        print("test acc:", acc)
-        train_loss_list.append(acc)
-    print(train_loss_list)
-
-plt.plot(range(len(train_loss_list)), train_loss_list, 'ro-')
-plt.title('min test loss')
-plt.xlabel('hidden dim')
-plt.ylabel('test loss')
-plt.show()
+# plt.plot(range(len(train_loss_list)), train_loss_list, 'ro-')
+# plt.title('min test loss')
+# plt.xlabel('hidden dim')
+# plt.ylabel('test loss')
+# plt.show()
