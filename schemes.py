@@ -137,6 +137,11 @@ if __name__ == '__main__':
     for index, row in df.iterrows():
         list.append(eval(row['arch_code']))    
 
+    if os.path.isfile('output.csv') == False:
+        with open('output.csv', 'w+', newline='') as res:
+                writer = csv.writer(res)
+                writer.writerow(['sample_id', 'arch_code', 'val_loss', 'test_mae', 'test_corr',
+                                'test_multi_acc', 'test_bi_acc', 'test_f1'])
     i = 0
     for net in list:
         design = translator(net)
