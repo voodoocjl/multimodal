@@ -72,7 +72,7 @@ class Attention(nn.Module):
         super(Attention, self).__init__()
         self.attention = nn.MultiheadAttention(input_size, 1)
         self.linear = nn.Linear(input_size, hidden_size)
-        self.classifier = nn.Linear(35, 64, 1)
+        self.classifier = nn.Linear(35, 1)
 
     def forward(self, x):        #(batch, seq, feature)
         x = x.permute(1, 0, 2)   #(seq, batch, feature)
@@ -165,7 +165,7 @@ arch_code = transform_attention(arch_code, [1, 5])   # 5 layers
 arch_code = arch_code.transpose(1, 2) + pos
 
 true_label = get_label(energy)
-t_size = 8000
+t_size = 2000
 arch_code_train = arch_code[:t_size]
 energy_train = energy[:t_size]
 label = get_label(energy_train)
