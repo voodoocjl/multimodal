@@ -8,151 +8,17 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset
 import time
 from sklearn.metrics import accuracy_score, f1_score
+from Network import Linear, Mlp, Conv_Net, Attention, get_label,change_code, transform_2d, transform_attention, positional_encoding
 
 torch.cuda.is_available = lambda : False
-# torch.set_num_threads(4)
 
-# torch.backends.cudnn.enabled = False
-# torch.backends.cudnn.benchmark = False
-# torch.backends.cudnn.deterministic = True
-
-class Encoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim):
-        super(Encoder, self).__init__()
-        self.network = nn.Sequential(
-            nn.Linear(input_dim, 1000),
-            # nn.Dropout(p=0.5),
-            nn.Sigmoid(),
-            nn.Linear(1000, hidden_dim),
-            # nn.Dropout(p=0.5),
-            nn.Sigmoid(),
-            nn.Linear(hidden_dim, output_dim)            
-            )
-        
-    def forward(self, x):
-        y = self.network(x)
-        # y[:,-1] = torch.sigmoid(y[:,-1])
-        # y = torch.round(y)
-        return y
-
-class Enco_Conv_Net(nn.Module):
-    def __init__(self, n_channels, output_dim):
-        super(Enco_Conv_Net, self).__init__()
-        hidden_chanels = 64
-        self.features_3x3 = nn.Sequential(
-            nn.Conv2d(1, hidden_chanels, kernel_size= (3, 3)),
-            nn.ReLU(),
-            nn.MaxPool2d(2,2)            
-            )
-        self.dropout = nn.Dropout2d(p=0.5)
-        self.pool1d = nn.MaxPool1d(3, 3)
-        self.features_2x2 = nn.Sequential(
-            nn.Conv2d(hidden_chanels, n_channels, kernel_size = 2),
-            nn.ReLU(),
-            # nn.MaxPool1d(3, 2)        
-            )
-        self.classifier = nn.Linear(n_channels * 5, output_dim)
-
-    def forward(self, x):
-        # x = transform(x)
-        x1 = self.features_3x3(x)
-        x1 = self.dropout(x1)
-        x2 = self.features_2x2(x1)
-        # x2 = self.pool1d(x2.squeeze(2))
-        # x1 = x1.flatten(1)        
-        x2 = x2.flatten(1)
-        # print(x2.shape)
-        # x_ = torch.cat((x1, x2), 1)
-        y = self.classifier(x2)
-        y[:,-1] = torch.sigmoid(y[:,-1])
-        return y
-
-class Attention(nn.Module):
-    def __init__(self, input_size, hidden_size):
-        super(Attention, self).__init__()
-        self.attention = nn.MultiheadAttention(input_size, 1)
-        self.linear = nn.Linear(input_size, hidden_size)
-        self.classifier = nn.Linear(35, 1)
-
-    def forward(self, x):        #(batch, seq, feature)
-        x = x.permute(1, 0, 2)   #(seq, batch, feature)
-        out, _ = self.attention(x, x, x)
-        out = out.permute(1, 0, 2)
-        out = self.linear(out)
-        out = torch.sigmoid(self.classifier(out.flatten(1)))
-        return out   
 # set random seed
 seed = 42
 random.seed(seed)
 np.random.seed(seed)
 torch.random.manual_seed(seed)
 
-def get_label(energy):
-    label = energy.clone()
-    for i in range(energy.shape[0]): 
-        label[i] = energy[i] < energy.mean()
-    return label
-
-def change_code(x):
-    """x- torch.Tensor, 
-    shape: (batch_size, arch_code_len), 
-    dtype: torch.float32"""
-    pos_dict = {'00': 3, '01': 4, '10': 5, '11': 6}
-    x_ = torch.Tensor()
-    for elem in x:
-        q = elem[0:7]
-        c = torch.cat((elem[7:13], torch.zeros(1,dtype=torch.float32)))
-        p = elem[13:].int().tolist()
-        p_ = torch.zeros(7, dtype=torch.float32)
-        for i in range(3):
-            p_[i] = pos_dict[str(p[2*i]) + str(p[2*i+1])]
-        for j in range(3, 6):
-            p_[j] = j + 1
-        elem_ = torch.cat((q, c, p_))
-        x_ = torch.cat((x_, elem_.unsqueeze(0)))
-    return x_
-
-def transform_2d(x, repeat = [1, 1]):
-    x = change_code(x)    
-    # single_type = x[:, :7].unsqueeze(1)
-    # entangle_type = x[:, 7:14].unsqueeze(1)
-    # entangle_position = x[:, 14:21].unsqueeze(1)
-    # x = torch.cat((single_type, entangle_type, entangle_position), 1)
-    x = x.reshape(-1, 3, 7)
-    x_flip = flip(x, dims = [2])
-    x = torch.cat((x_flip, x), 2)
-    x_1 = x
-    for i in range(repeat[0] -1):
-        x_1 = torch.cat((x_1, x), 1)
-    x = x_1
-    for i in range(repeat[1] -1):
-        x = torch.cat((x, x_1), 2)
-    return x.unsqueeze(1)
-
-def transform_attention(x, repeat = [1, 1]):
-    x = change_code(x)    
-    x = x.reshape(-1, 3, 7)
-    x_1 = x
-    for i in range(repeat[0] -1):
-        x_1 = torch.cat((x_1, x), 1)
-    x = x_1
-    for i in range(repeat[1] -1):
-        x = torch.cat((x, x_1), 2)
-    return x
-
-def positional_encoding(max_len, d_model):
-    pos = torch.arange(max_len).unsqueeze(1)
-    i = torch.arange(d_model).unsqueeze(0)
-    angle_rates = 1 / torch.pow(10000, (2 * torch.div(i, 2, rounding_mode='floor')) / d_model)
-    angle_rads = pos * angle_rates
-    sines = torch.sin(angle_rads[:, 0::2])
-    cosines = torch.cos(angle_rads[:, 1::2])
-    pos_encoding = torch.cat([sines, cosines], dim=-1)
-    return pos_encoding
-
-pos = positional_encoding(35, 3)
-
-with open('data/mosi_dataset', 'rb') as file:
+with open('data/mosi_test', 'rb') as file:
     dataset = pickle.load(file)
 
 arch_code, energy = [], []
@@ -161,11 +27,32 @@ for key in dataset:
     energy.append(dataset[key])
 arch_code = torch.from_numpy(np.asarray(arch_code, dtype=np.float32))
 energy =  torch.from_numpy(np.asarray(energy, dtype=np.float32))
-arch_code = transform_attention(arch_code, [1, 5])   # 5 layers
-arch_code = arch_code.transpose(1, 2) + pos
+
+# # attention
+# arch_code = transform_attention(arch_code, [1, 5])   # 5 layers
+# pos = positional_encoding(35, 3)
+# arch_code = arch_code.transpose(1, 2) + pos
+# model = Attention(3, 1)
+
+# # linear
+# arch_code = change_code(arch_code)
+# model = Linear(21, 1)
+
+# mlp
+arch_code = change_code(arch_code)
+model = Mlp(21, 6, 1)
+
+# # conv
+# arch_code = transform_2d(arch_code, [2,2])
+# channels = 2
+# model = Conv_Net(channels, 1)
+# dim = model(arch_code).shape[1]
+# model.add_module('classifier', nn.Linear(dim, 1))
+
+Epoch = 3001
 
 true_label = get_label(energy)
-t_size = 2000
+t_size = 4000
 arch_code_train = arch_code[:t_size]
 energy_train = energy[:t_size]
 label = get_label(energy_train)
@@ -179,20 +66,31 @@ dataset = TensorDataset(arch_code_train, label)
 dataloader = DataLoader(dataset, batch_size=128, shuffle=True)
 
 arch_code_test = arch_code[t_size:]
+energy_test = energy[t_size:]
 test_label = true_label[t_size:]
+
+mean = energy_test.mean()
+good, bad, good_num, bad_num = 0, 0, 0, 0
+for i in energy_test:
+    if i < mean:
+        good += i
+        good_num += 1
+    else:
+        bad += i
+        bad_num += 1
+
+print("dataset size: ", len(energy))
+print("training size: ", len(energy_train))
+print("test size: ", len(arch_code_test))
+print("Ground truth:", good / good_num, bad / bad_num)
 
 if torch.cuda.is_available():
     arch_code_test = arch_code_test.cuda()
     # energy_test = energy_test.cuda()
     test_label = test_label.cuda()
 
-print("dataset size: ", len(energy))
-print("training size: ", len(energy_train))
-print("test size: ", len(arch_code_test))
-
 # for channel in range(1, 10, 2):
-model = Attention(3, 1)
-# model = Encoder(19, 100, 1)
+
 if torch.cuda.is_available():
     model.cuda()    
 loss_fn = nn.MSELoss()
@@ -200,7 +98,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 train_loss_list, test_loss_list = [], []
 s = time.time()
-for epoch in range(1, 3001):
+for epoch in range(1, Epoch):
     for x, y in dataloader:
         model.train()
         pred = model(x) 
@@ -231,20 +129,14 @@ with torch.no_grad():
     test_label = test_label.cpu()
     acc = accuracy_score(pred_label.numpy(), test_label.numpy())
     # acc = f1_score(test_label, pred_label)
-    print("test acc:", acc)
-    # train_loss_list.append(acc)
+    good_num = pred_label.sum()
+    bad_num = pred_label.shape[0] - good_num
+    mae_good = (energy_test * pred_label).sum() / good_num
+    mae_bad =  (energy_test * (1 - pred_label)).sum() / bad_num
+    print("test acc:", acc, mae_good, mae_bad)
+    train_loss_list.append(acc)
 e = time.time()
 print('time: ', e-s)
-
-model.eval()
-with torch.no_grad():
-    pred = model(arch_code_test).cpu()      
-    pred_label = (pred[:, -1] > 0.5).float()
-    test_label = test_label.cpu()
-    acc = accuracy_score(pred_label.numpy(), test_label.numpy())
-    # acc = f1_score(test_label, pred_label)
-    print("test acc:", acc)
-    train_loss_list.append(acc)
 print(train_loss_list)
 
 # plt.plot(range(len(train_loss_list)), train_loss_list, 'ro-')
