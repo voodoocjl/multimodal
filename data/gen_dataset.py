@@ -2,16 +2,17 @@ import csv
 import pickle
 import os
 
+name = 'mosi_test'  #'mosi_dataset'
 dir_path = os.path.dirname(os.path.realpath(__file__))
 files = os.listdir(dir_path)
-dataset_file = os.path.join(dir_path, 'mosi_dataset')
+dataset_file = os.path.join(dir_path, name)
 
-with open(dataset_file, 'rb') as file:
-    dataset = pickle.load(file)
-
-print("size:", len(dataset))
-
-# dataset = {}
+if os.path.isfile(dataset_file) == True:
+    with open(dataset_file, 'rb') as file:
+        dataset = pickle.load(file)
+        print("size:", len(dataset))
+else:
+    dataset = {}
 
 for file in files:
     extension = os.path.splitext(file)[1]

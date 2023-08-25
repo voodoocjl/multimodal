@@ -11,7 +11,6 @@ from schemes import Scheme
 import time
 from sampling import sampling_node
 
-
 def num2ord(num):
     if num % 10 == 1:
         ord_str = str(num) + 'st'
@@ -33,7 +32,7 @@ class MCTS:
         self.search_space   = search_space
         self.ARCH_CODE_LEN  = arch_code_len
         self.ROOT           = None
-        self.Cp             = 0.5
+        self.Cp             = 0.2
         self.nodes          = []
         self.samples        = {}
         self.TASK_QUEUE     = []
@@ -212,7 +211,7 @@ class MCTS:
             self.predict_nodes('mean')
             self.reset_node_data()   
 
-        while len(self.search_space) > 0 and self.ITERATION < 100:
+        while len(self.search_space) > 0 and self.ITERATION < 18:
             if self.ITERATION > 0:
                 self.dump_all_states(len(self.samples))
             print("\niteration:", self.ITERATION)
@@ -263,7 +262,7 @@ class MCTS:
             print("finished")
             self.print_tree()
             # sampling nodes
-            nodes = [0, 1, 2, 3, 12, 13, 14, 15]
+            nodes = [0, 1, 2, 3, 8, 12, 13, 14, 15]
             sampling_node(self, nodes, dataset, self.ITERATION)
 
             for i in range(0, 50):
@@ -306,17 +305,17 @@ if __name__ == '__main__':
     np.random.seed(42)
     torch.random.manual_seed(42)
 
-    with open('search_space', 'rb') as file:
+    with open('search_space_pretrain', 'rb') as file:
         search_space = pickle.load(file)    
     arch_code_len = len(search_space[0])
     print("\nthe length of architecture codes:", arch_code_len)
     print("total architectures:", len(search_space))
 
-    with open('data/mosi_dataset', 'rb') as file:
+    with open('data/mosi_test', 'rb') as file:
         dataset = pickle.load(file)
     # with open('data/chemistry_validation', 'rb') as file:
     #     validation = pickle.load(file)
-    validation = dict(list(dataset.items())[-1000:])
+    validation = dict(list(dataset.items())[-500:])
 
     if os.path.isfile('results.csv') == False:
         with open('results.csv', 'w+', newline='') as res:

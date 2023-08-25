@@ -6,92 +6,11 @@ import torch.nn as nn
 from torch import optim
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import accuracy_score
+from Network import Linear, Mlp, Conv_Net, Attention, get_label,change_code, transform_2d, transform_attention
 
-
-"""
-class LinearModel(nn.Module):
-    def __init__(self, input_dim, output_dim):
-        super(LinearModel, self).__init__()
-        self.fc = nn.Linear(input_dim, output_dim)
-        torch.nn.init.xavier_uniform_(self.fc.weight)
-
-    def forward(self, x):
-        y = self.fc(x)
-        return y
-"""
 
 torch.cuda.is_available = lambda : False
 
-class Encoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim):
-        super(Encoder, self).__init__()
-        self.network = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.Sigmoid(),
-            nn.Linear(hidden_dim, output_dim)
-            )
-
-    def forward(self, x):
-        x = change_code(x)
-        y = self.network(x)
-        y[:,-1] = torch.sigmoid(y[:, -1])
-        return y
-
-
-class Enco_Conv_Net(nn.Module):
-    def __init__(self, n_channels, output_dim):
-        super(Enco_Conv_Net, self).__init__()
-        self.features_2x2 = nn.Sequential(
-            nn.Conv2d(1, n_channels, kernel_size=2),
-            nn.ReLU(),
-            nn.MaxPool2d(2,2)            
-            )
-        self.pool1d = nn.MaxPool1d(3, 2)
-        self.features_4x4 = nn.Sequential(
-            nn.Conv2d(1, n_channels, kernel_size=4),
-            nn.ReLU(),
-            # nn.MaxPool1d(3, 2)        
-            )
-        self.classifier = nn.Linear(n_channels * 9, output_dim)
-
-    def forward(self, x):
-        x = self.transform(x)
-        x1 = self.features_2x2(x)
-        x2 = self.features_4x4(x)
-        x2 = self.pool1d(x2.squeeze(2))
-        x1 = x1.flatten(1)        
-        x2 = x2.flatten(1)
-        x_ = torch.cat((x1, x2), 1)
-        y = self.classifier(x_)
-        y[:,-1] = torch.sigmoid(y[:,-1])
-        return y
-    
-    def transform(self, x):
-        len = x[0].shape[0]
-        xbar = torch.cat((x[:, 6:], x[:, :6]), 1)
-        x = x.unsqueeze(1).unsqueeze(1)
-        xbar = xbar.unsqueeze(1).unsqueeze(1)
-        x = torch.cat((x, xbar, x, xbar), 2)
-        return x
-
-def change_code(x):
-    """x- torch.Tensor, 
-    shape: (batch_size, arch_code_len), 
-    dtype: torch.float32"""
-    pos_dict = {'00': 3, '01': 4, '10': 5, '11': 6}
-    x_ = torch.Tensor()
-    for elem in x:
-        q = elem[0:7]
-        c = torch.cat((elem[7:13], torch.zeros(1,dtype=torch.float32)))
-        p = elem[13:].int().tolist()
-        p_ = torch.zeros(7, dtype=torch.float32)
-        for i in range(3):
-            p_[i] = pos_dict[str(p[2*i]) + str(p[2*i+1])]
-        for j in range(3, 6):
-            p_[j] = j + 1
-        elem_ = torch.cat((q, c, p_))
-        x_ = torch.cat((x_, elem_.unsqueeze(0)))
-    return x_
 class Classifier:
     def __init__(self, samples, input_dim, node_id):
         assert type(samples) == type({})
@@ -102,12 +21,13 @@ class Classifier:
         self.input_dim_2d     = 21 
         self.training_counter = 0
         self.node_layer       = ceil(log2(node_id + 2) - 1)
-        self.hidden_dims      =  [5, 6, 7, 8, 9]  #[16, 20, 24, 28, 32]
+        self.hidden_dims      =  [6, 6, 6, 6, 6]  #[16, 20, 24, 28, 32]
         # if node_id == 0:
         #     self.model        = Encoder(input_dim, self.hidden_dims[self.node_layer], 1)
         # else:
         #     self.model        = Enco_Conv_Net(4, 2)
-        self.model            = Encoder(self.input_dim_2d, self.hidden_dims[self.node_layer], 2)
+        self.model            = Mlp(self.input_dim_2d, self.hidden_dims[self.node_layer], 2)
+        # self.model            = Attention(3, 1, 2)  #input, hidden, output
         if torch.cuda.is_available():
             self.model.cuda()
         self.loss_fn          = nn.MSELoss()
@@ -119,14 +39,9 @@ class Classifier:
         self.nets             = None
         self.maeinv           = None
         self.labels           = None
+        self.mean             = 0
 
-    def get_label(self, energy):
-        label = torch.zeros_like(energy)
-        for i in range(energy.shape[0]):
-            label[i] = energy[i] > energy.mean()
-        return label
-
-    def update_samples(self, latest_samples):
+    def update_samples(self, latest_samples, mean):
         assert type(latest_samples) == type(self.samples)
         sampled_nets = []
         nets_maeinv  = []
@@ -135,8 +50,15 @@ class Classifier:
             sampled_nets.append(net)
             nets_maeinv.append(v)
         self.nets = torch.from_numpy(np.asarray(sampled_nets, dtype=np.float32).reshape(-1, self.input_dim))
+
+        # linear, mlp
+        self.nets = change_code(self.nets)
+
+        # # attention
+        # self.nets = transform_attention(self.nets, [1, 5])   # 5 layers
+                
         self.maeinv = torch.from_numpy(np.asarray(nets_maeinv, dtype=np.float32).reshape(-1, 1))
-        self.labels = self.get_label(self.maeinv)
+        self.labels = get_label(self.maeinv, mean)
         self.samples = latest_samples
         if torch.cuda.is_available():
             self.nets = self.nets.cuda()
@@ -144,13 +66,14 @@ class Classifier:
 
     def train(self):
         if self.training_counter == 0:
-            self.epochs = 4000
+            self.epochs = 3000
         else:
-            self.epochs = 2000
+            self.epochs = 1000
         self.training_counter += 1
         # in a rare case, one branch has no networks
         if len(self.nets) == 0:
             return
+        # linear, mlp
         nets = self.nets
         labels = self.labels
         maeinv = self.maeinv
@@ -212,18 +135,19 @@ class Classifier:
         remaining_archs = torch.from_numpy(np.asarray(remaining_archs, dtype=np.float32).reshape(-1, self.input_dim))
         if torch.cuda.is_available():
             remaining_archs = remaining_archs.cuda()
-        outputs = self.model(remaining_archs)
-        labels = outputs[:, -1].reshape(-1, 1)  #output labels
-        xbar = outputs[:, 0].mean().detach().tolist()
+        outputs = self.model(change_code(remaining_archs))
+        # outputs = self.model(transform_attention(remaining_archs, [1, 5]))
+        # labels = outputs[:, -1].reshape(-1, 1)  #output labels
+        xbar = outputs[:, 0].mean().tolist()
 
         if torch.cuda.is_available():
             remaining_archs = remaining_archs.cpu()
-            labels         = labels.cpu()
+            outputs         = outputs.cpu()
         result = {}
         for k in range(0, len(remaining_archs)):
             arch = remaining_archs[k].detach().numpy().astype(np.int32)
             arch_str = json.dumps(arch.tolist())
-            result[arch_str] = labels[k].detach().numpy().tolist()[0]
+            result[arch_str] = outputs[k].tolist()
         assert len(result) == len(remaining)
         return result, xbar
 
@@ -240,10 +164,10 @@ class Classifier:
             for k, v in predictions.items():
                 # if v < self.sample_mean():
                 # split by label
-                if v < 0.5:
-                    samples_badness[k] = v
+                if v[-1] < 0.5:
+                    samples_badness[k] = v[0]
                 else:
-                    samples_goodies[k] = v
+                    samples_goodies[k] = v[0]
         else:
             predictions = np.mean(list(remaining.values()))
             for k, v in remaining.items():
@@ -293,8 +217,9 @@ class Classifier:
             outputs   = outputs.cpu()
         predictions = {}
         for k in range(0, len(self.nets)):
-            arch = self.nets[k].detach().numpy().astype(np.int32)
-            arch_str = json.dumps(arch.tolist())
+            # arch = self.nets[k].detach().numpy().astype(np.int32)
+            # arch_str = json.dumps(arch.tolist())
+            arch_str = list(self.samples)[k]
             predictions[arch_str] = outputs[k].detach().numpy().tolist()[0]  # arch_str -> pred_test_mae
         assert len(predictions) == len(self.nets)
         # avg_maeinv = self.sample_mean()

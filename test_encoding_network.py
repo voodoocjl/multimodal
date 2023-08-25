@@ -28,19 +28,19 @@ for key in dataset:
 arch_code = torch.from_numpy(np.asarray(arch_code, dtype=np.float32))
 energy =  torch.from_numpy(np.asarray(energy, dtype=np.float32))
 
-# # attention
-# arch_code = transform_attention(arch_code, [1, 5])   # 5 layers
-# pos = positional_encoding(35, 3)
-# arch_code = arch_code.transpose(1, 2) + pos
-# model = Attention(3, 1)
+# attention
+arch_code = transform_attention(arch_code, [1, 5])   # 5 layers
+pos = positional_encoding(35, 3)
+arch_code = arch_code + pos
+model = Attention(3, 1, 1)
 
 # # linear
 # arch_code = change_code(arch_code)
 # model = Linear(21, 1)
 
-# mlp
-arch_code = change_code(arch_code)
-model = Mlp(21, 6, 1)
+# # mlp
+# arch_code = change_code(arch_code)
+# model = Mlp(21, 6, 1)
 
 # # conv
 # arch_code = transform_2d(arch_code, [2,2])

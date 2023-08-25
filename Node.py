@@ -119,7 +119,7 @@ class Node:
     def get_uct(self, Cp):
         if self.is_root and self.parent == None:
             return float('inf')
-        if self.n == 0:
+        if self.n == 0 and len(self.bag) > 0:
             return float('inf')
         # coeff = 2 ** (5 - ceil(log2(self.id + 2))) 
         if len(self.bag) == 0:
@@ -137,7 +137,7 @@ class Node:
         if self.parent == None and self.is_root == True:
         # training starts from the bag
             assert len(self.bag) > 0
-            self.classifier.update_samples(self.bag)
+            self.classifier.update_samples(self.bag, self.x_bar)
             self.good_kid_data, self.bad_kid_data = self.classifier.split_data()
         elif self.is_leaf:
             if self.is_good_kid:
@@ -147,18 +147,14 @@ class Node:
         else:
             if self.is_good_kid:
                 self.bag = self.parent.good_kid_data
-                self.classifier.update_samples(self.parent.good_kid_data)
+                self.classifier.update_samples(self.parent.good_kid_data, self.x_bar)
                 self.good_kid_data, self.bad_kid_data = self.classifier.split_data()
             else:
                 self.bag = self.parent.bad_kid_data
-                self.classifier.update_samples(self.parent.bad_kid_data)
+                self.classifier.update_samples(self.parent.bad_kid_data, self.x_bar)
                 self.good_kid_data, self.bad_kid_data = self.classifier.split_data()
-        if len(self.bag) == 0:
-           self.x_bar = float('inf')
-           self.n     = 0
-        else:
-           self.x_bar = np.mean(np.array(list(self.bag.values())))
-           self.n     = len(self.bag.values())
+        self.x_bar = np.mean(np.array(list(self.bag.values())))
+        self.n     = len(self.bag.values())
 
 
     def predict(self, method = None):                       
@@ -173,11 +169,11 @@ class Node:
             if self.is_good_kid:
                 self.bag = self.parent.good_kid_data
                 self.good_kid_data, self.bad_kid_data, xbar = self.classifier.split_predictions(self.parent.good_kid_data, method)
-                self.x_bar = xbar                
+                # self.x_bar = xbar                
             else:
                 self.bag = self.parent.bad_kid_data
                 self.good_kid_data, self.bad_kid_data, xbar = self.classifier.split_predictions(self.parent.bad_kid_data, method)
-                self.x_bar = xbar
+                # self.x_bar = xbar
         if method:
             self.validation = self.bag.copy()
 
