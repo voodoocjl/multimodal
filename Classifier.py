@@ -6,10 +6,20 @@ import torch.nn as nn
 from torch import optim
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import accuracy_score
-from Network import Linear, Mlp, Conv_Net, Attention, get_label,change_code, transform_2d, transform_attention
+from Network import Linear, Mlp, Conv_Net, Attention, change_code, transform_2d, transform_attention
 
 
 torch.cuda.is_available = lambda : False
+
+def get_label(energy, mean = None):
+    label = energy.clone()
+    if mean and mean < float('inf'):
+        energy_mean = mean
+    else:
+        energy_mean = energy.mean()
+    for i in range(energy.shape[0]): 
+        label[i] = energy[i] > energy_mean
+    return label
 
 class Classifier:
     def __init__(self, samples, input_dim, node_id):
@@ -21,13 +31,13 @@ class Classifier:
         self.input_dim_2d     = 21 
         self.training_counter = 0
         self.node_layer       = ceil(log2(node_id + 2) - 1)
-        self.hidden_dims      =  [6, 6, 6, 6, 6]  #[16, 20, 24, 28, 32]
+        # self.hidden_dims      =  [6, 6, 6, 6, 6]  #[16, 20, 24, 28, 32]
         # if node_id == 0:
         #     self.model        = Encoder(input_dim, self.hidden_dims[self.node_layer], 1)
         # else:
         #     self.model        = Enco_Conv_Net(4, 2)
-        self.model            = Mlp(self.input_dim_2d, self.hidden_dims[self.node_layer], 2)
-        # self.model            = Attention(3, 1, 2)  #input, hidden, output
+        # self.model            = Mlp(self.input_dim_2d, self.hidden_dims[self.node_layer], 2)
+        self.model            = Attention(3, 1, 2)  #input, hidden, output
         if torch.cuda.is_available():
             self.model.cuda()
         self.loss_fn          = nn.MSELoss()
@@ -51,11 +61,11 @@ class Classifier:
             nets_maeinv.append(v)
         self.nets = torch.from_numpy(np.asarray(sampled_nets, dtype=np.float32).reshape(-1, self.input_dim))
 
-        # linear, mlp
-        self.nets = change_code(self.nets)
+        # # linear, mlp
+        # self.nets = change_code(self.nets)
 
-        # # attention
-        # self.nets = transform_attention(self.nets, [1, 5])   # 5 layers
+        # attention
+        self.nets = transform_attention(self.nets, [1, 5])   # 5 layers
                 
         self.maeinv = torch.from_numpy(np.asarray(nets_maeinv, dtype=np.float32).reshape(-1, 1))
         self.labels = get_label(self.maeinv, mean)
@@ -135,8 +145,8 @@ class Classifier:
         remaining_archs = torch.from_numpy(np.asarray(remaining_archs, dtype=np.float32).reshape(-1, self.input_dim))
         if torch.cuda.is_available():
             remaining_archs = remaining_archs.cuda()
-        outputs = self.model(change_code(remaining_archs))
-        # outputs = self.model(transform_attention(remaining_archs, [1, 5]))
+        # outputs = self.model(change_code(remaining_archs))
+        outputs = self.model(transform_attention(remaining_archs, [1, 5]))
         # labels = outputs[:, -1].reshape(-1, 1)  #output labels
         xbar = outputs[:, 0].mean().tolist()
 
