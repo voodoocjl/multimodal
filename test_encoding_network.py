@@ -4,7 +4,6 @@ import csv
 import numpy as np
 import torch
 from torch import nn, flip
-import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset
 import time
 from sklearn.metrics import accuracy_score, f1_score
@@ -30,8 +29,6 @@ energy =  torch.from_numpy(np.asarray(energy, dtype=np.float32))
 
 # attention
 arch_code = transform_attention(arch_code, [1, 5])   # 5 layers
-pos = positional_encoding(35, 3)
-arch_code = arch_code + pos
 model = Attention(3, 1, 1)
 
 # # linear
