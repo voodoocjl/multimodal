@@ -10,6 +10,7 @@ from FusionModel import translator
 from schemes import Scheme
 import time
 from sampling import sampling_node
+import multiprocessing as mp
 from multiprocessing import Process, Queue, Manager
 
 def num2ord(num):
@@ -322,39 +323,35 @@ if __name__ == '__main__':
     # q = Queue()
     with Manager() as manager:
         q = manager.Queue()
-        p = []
-        for i in range(4):
-            p.append(Process(target=train_nodes, args=(agent, 3+i, q))) 
-        # p2 = Process(target=train_nodes, args=(agent, 2, q))
         s = time.time()
-        for i in range(4):
-            p[i].start()
-        for i in range(4):
-            p[i].join()
+        # p = []
+        # for i in range(4):
+        #     p.append(Process(target=train_nodes, args=(agent, 3+i, q))) 
+        # # p2 = Process(target=train_nodes, args=(agent, 2, q))
+        
+        # for i in range(4):
+        #     p[i].start()
+        # for i in range(4):
+        #     p[i].join()
+        with mp.Pool(processes = 8) as pool:        
+            pool.starmap(train_nodes, [(agent, 3+i, q) for i in range(4)])
         while not q.empty():
             [num, node] = q.get()
             agent.nodes[num] = node
             agent.nodes[2 * num + 1].parent = node
             agent.nodes[2 * num + 2].parent = node
             print(node)
-        p = []    
 
-        for i in range(8):
-            p.append(Process(target=train_nodes, args=(agent, 7+i, q))) 
-        # p2 = Process(target=train_nodes, args=(agent, 2, q))
-        
-        for i in range(8):
-            p[i].start()
-        for i in range(8):
-            p[i].join()
-        # p1.join()
-        # p2.join()
-        e = time.time()       
-               
+        with mp.Pool(processes = 8) as pool:        
+            pool.starmap(train_nodes, [(agent, 7+i, q) for i in range(8)])
         while not q.empty():
             [num, node] = q.get()
             # print(num)
             print(node)
+       
+        e = time.time()       
+               
+        
         print('time:', e-s)
 
        
