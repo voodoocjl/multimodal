@@ -13,6 +13,10 @@ class Linear(nn.Module):
         y = self.network(x)
         # y[:,-1] = torch.sigmoid(y[:,-1])        
         return y
+    
+    def pre_processing(self, x, repeat = None):    
+        x = change_code(x)
+        return x
 
 class Mlp(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
@@ -28,6 +32,10 @@ class Mlp(nn.Module):
         y[:,-1] = torch.sigmoid(y[:,-1])
         # y = torch.round(y)
         return y
+    
+    def pre_processing(self, x, repeat = None):    
+        x = change_code(x)
+        return x
 
 class Conv_Net(nn.Module):
     def __init__(self, n_channels, output_dim):
@@ -37,14 +45,7 @@ class Conv_Net(nn.Module):
             nn.Conv2d(1, n_channels, kernel_size= (3, 3)),
             nn.ReLU(),
             nn.MaxPool2d(2,2)            
-            )
-        # self.dropout = nn.Dropout2d(p=0.5)        
-        # self.features_2x2 = nn.Sequential(
-        #     nn.Conv2d(hidden_chanels, n_channels, kernel_size = 2),
-        #     nn.ReLU(),
-        #     # nn.MaxPool1d(3, 2)        
-        #     )
-        # self.classifier = nn.Linear(n_channels * 12, output_dim)
+            )        
 
     def forward(self, x):
         # x = transform(x)
@@ -56,27 +57,16 @@ class Conv_Net(nn.Module):
             y = self.classifier(y)
         y[:,-1] = torch.sigmoid(y[:,-1])
         return y
+    
+    def pre_processing(self, x, repeat = [1, 1]):
+        x = transform_2d(x, repeat)
+        return x
 
-# class Attention(nn.Module):
-#     def __init__(self, input_size, hidden_size, output_size):
-#         super(Attention, self).__init__()
-#         self.attention = nn.MultiheadAttention(input_size, 7)
-#         # self.linear = nn.Linear(input_size, hidden_size)
-#         self.classifier = nn.Linear(5 * input_size, output_size)
-
-#     def forward(self, x):        #(batch, seq, feature)
-#         x = x.permute(1, 0, 2)   #(seq, batch, feature)
-#         out, _ = self.attention(x, x, x)
-#         out = out.permute(1, 0, 2)
-#         # out = torch.sigmoid(self.linear(out))
-#         out = self.classifier(out.flatten(1))
-#         out[:, -1] = torch.sigmoid(out[:, -1])
-#         return out
     
 class Attention(nn.Module):  # residue
     def __init__(self, input_size, hidden_size, output_size):
         super(Attention, self).__init__()
-        # self.input_linear = nn.Linear(21, input_size)
+        # self.input_linear = nn.Linear(21, input_size)        
         self.attention = nn.MultiheadAttention(input_size, 7)
         self.bn = nn.LayerNorm(input_size)
         self.classifier = nn.Linear(5 * input_size, output_size)
@@ -91,6 +81,10 @@ class Attention(nn.Module):  # residue
         out = self.classifier(out.flatten(1))
         # out[:, -1] = torch.sigmoid(out[:, -1])
         return out
+    
+    def pre_processing(self, x, repeat = [1, 1]):
+        x = transform_attention(x, repeat)
+        return x
 
 def get_label(energy, mean = None):
     label = energy.clone()

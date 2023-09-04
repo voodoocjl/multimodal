@@ -35,7 +35,7 @@ class Classifier:
         self.input_dim_2d     = 21 
         self.training_counter = 0
         self.node_layer       = ceil(log2(node_id + 2) - 1)
-        self.hidden_dims      =  [32, 28, 24, 20, 16]  #[16, 20, 24, 28, 32]
+        self.hidden_dims      =  [12, 12, 12, 12, 12]  #[16, 20, 24, 28, 32]
         # if node_id == 0:
         #     self.model        = Encoder(input_dim, self.hidden_dims[self.node_layer], 1)
         # else:
@@ -64,14 +64,8 @@ class Classifier:
             net = json.loads(k)
             sampled_nets.append(net)
             nets_maeinv.append(v)
-        self.nets = torch.from_numpy(np.asarray(sampled_nets, dtype=np.float32).reshape(-1, self.input_dim))
-
-        # # linear, mlp
-        # self.nets = change_code(self.nets)
-
-        # attention
-        self.nets = transform_attention(self.nets, [5, 1])   # 5 layers
-                
+        self.nets = torch.from_numpy(np.asarray(sampled_nets, dtype=np.float32).reshape(-1, self.input_dim))      
+        self.nets = self.model.pre_processing(self.nets, [5, 1])   # 5 layers, preprocessing                
         self.maeinv = torch.from_numpy(np.asarray(nets_maeinv, dtype=np.float32).reshape(-1, 1))
         self.labels = get_label(self.maeinv, mean)
         self.samples = latest_samples
@@ -168,9 +162,8 @@ class Classifier:
             remaining_archs.append(net)
         remaining_archs = torch.from_numpy(np.asarray(remaining_archs, dtype=np.float32).reshape(-1, self.input_dim))
         if torch.cuda.is_available():
-            remaining_archs = remaining_archs.cuda()
-        # outputs = self.model(change_code(remaining_archs))
-        outputs = self.model(transform_attention(remaining_archs, [5, 1]))
+            remaining_archs = remaining_archs.cuda()        
+        outputs = self.model(self.model.pre_processing(remaining_archs, [5, 1]))
         # labels = outputs[:, -1].reshape(-1, 1)  #output labels
         xbar = outputs[:, 0].mean().tolist()
 
