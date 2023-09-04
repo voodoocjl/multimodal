@@ -120,7 +120,7 @@ def sampling_node(agent, nodes, dataset, iteration, verbose = None):
     energy_list = []
     for j in nodes:  # leaf nodes for sampling
         target_bin = leaf_nodes[j]       
-        number = 100 if len(target_bin.bag) > 100 else len(target_bin.bag)
+        number = 10 if len(target_bin.bag) > 100 else len(target_bin.bag)
         sampled_arch_list = random.sample(list(target_bin.bag.keys()), number)        
         energy = []
         for sample_no in range(len(sampled_arch_list)):  # the number of nodes needed to be sampled
@@ -160,7 +160,7 @@ if __name__ == '__main__':
     np.random.seed(42)
     torch.random.manual_seed(42)
     
-    with open('data/chemistry_dataset', 'rb') as file:
+    with open('data/mosi_test', 'rb') as file:
         dataset = pickle.load(file)            
     
     state_path = 'states'
@@ -168,10 +168,10 @@ if __name__ == '__main__':
     if files:
         files.sort(key=lambda x: os.path.getmtime(os.path.join(state_path, x)))
         node_path = os.path.join(state_path, files[-1])
-        # node_path = 'states/mcts_agent_10000'
+        node_path = 'results/linear_stable/mcts_agent_2100'
         with open(node_path, 'rb') as json_data:
             agent = pickle.load(json_data)
-        with open('search_space_1', 'rb') as file:
+        with open('search_space_pretrain', 'rb') as file:
             search_space_1 = pickle.load(file)
         agent.search_space+=search_space_1
 
@@ -195,7 +195,7 @@ if __name__ == '__main__':
     print("finished")
     agent.print_tree()
        
-    nodes = [0, 1, 4, 5, 8, 9, 14, 15]    
-    sampling_node(agent, nodes, dataset, 1)
+    nodes = [0]  #, 1, 4, 5, 8, 9, 14, 15]    
+    sampling_node(agent, nodes, dataset, 1, 'verbose')
         
     
