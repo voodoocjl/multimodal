@@ -109,7 +109,6 @@ class MCTS:
         for i in self.nodes:
             i.train()
 
-
     def predict_nodes(self, method = None, dataset =None):
         for i in self.nodes:
             if dataset:
@@ -211,7 +210,7 @@ class MCTS:
             self.predict_nodes('mean')
             self.reset_node_data()   
 
-        while len(self.search_space) > 0 and self.ITERATION < 18:
+        while len(self.search_space) > 0 and self.ITERATION < 40:
             if self.ITERATION > 0:
                 self.dump_all_states(len(self.samples))
             print("\niteration:", self.ITERATION)
@@ -332,7 +331,7 @@ if __name__ == '__main__':
     if files:
         files.sort(key=lambda x: os.path.getmtime(os.path.join(state_path, x)))
         node_path = os.path.join(state_path, files[-1])
-        # node_path = 'states/mcts_agent_4000'
+        # node_path = 'states/mcts_agent_850'
         with open(node_path, 'rb') as json_data:
             agent = pickle.load(json_data)
         print("\nresume searching,", agent.ITERATION, "iterations completed before")

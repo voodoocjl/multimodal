@@ -6,12 +6,12 @@ class Linear(nn.Module):
     def __init__(self, input_dim, output_dim):
         super(Linear, self).__init__()
         self.network = nn.Sequential(
-            nn.Linear(input_dim, output_dim),
-            nn.Sigmoid()                       
+            nn.Linear(input_dim, output_dim)                                   
             )
         
     def forward(self, x):
-        y = self.network(x)        
+        y = self.network(x)
+        # y[:,-1] = torch.sigmoid(y[:,-1])        
         return y
 
 class Mlp(nn.Module):
@@ -57,20 +57,39 @@ class Conv_Net(nn.Module):
         y[:,-1] = torch.sigmoid(y[:,-1])
         return y
 
-class Attention(nn.Module):
+# class Attention(nn.Module):
+#     def __init__(self, input_size, hidden_size, output_size):
+#         super(Attention, self).__init__()
+#         self.attention = nn.MultiheadAttention(input_size, 7)
+#         # self.linear = nn.Linear(input_size, hidden_size)
+#         self.classifier = nn.Linear(5 * input_size, output_size)
+
+#     def forward(self, x):        #(batch, seq, feature)
+#         x = x.permute(1, 0, 2)   #(seq, batch, feature)
+#         out, _ = self.attention(x, x, x)
+#         out = out.permute(1, 0, 2)
+#         # out = torch.sigmoid(self.linear(out))
+#         out = self.classifier(out.flatten(1))
+#         out[:, -1] = torch.sigmoid(out[:, -1])
+#         return out
+    
+class Attention(nn.Module):  # residue
     def __init__(self, input_size, hidden_size, output_size):
         super(Attention, self).__init__()
-        self.attention = nn.MultiheadAttention(input_size, 1)
-        self.linear = nn.Linear(input_size, hidden_size)
-        self.classifier = nn.Linear(35, output_size)
+        # self.input_linear = nn.Linear(21, input_size)
+        self.attention = nn.MultiheadAttention(input_size, 7)
+        self.bn = nn.LayerNorm(input_size)
+        self.classifier = nn.Linear(5 * input_size, output_size)
 
     def forward(self, x):        #(batch, seq, feature)
-        x = x.permute(1, 0, 2)   #(seq, batch, feature)
+        # x = self.input_linear(x).permute(1, 0, 2)   #(seq, batch, feature)
+        x = x.permute(1, 0, 2)
         out, _ = self.attention(x, x, x)
+        out = x + out
         out = out.permute(1, 0, 2)
-        out = self.linear(out)
+        out = self.bn(out)
         out = self.classifier(out.flatten(1))
-        out[:, -1] = torch.sigmoid(out[:, -1])
+        # out[:, -1] = torch.sigmoid(out[:, -1])
         return out
 
 def get_label(energy, mean = None):
@@ -116,16 +135,18 @@ def transform_2d(x, repeat = [1, 1]):
     return x.unsqueeze(1)
 
 def transform_attention(x, repeat = [1, 1]):
-    x = change_code(x)    
-    x = x.reshape(-1, 3, 7)
+    if len(x) == 0:
+        return []
+    x = change_code(x).unsqueeze(1)    
+    # x = x.reshape(-1, 3, 7)
     x_1 = x
     for i in range(repeat[0] -1):
         x_1 = torch.cat((x_1, x), 1)
     x = x_1
     for i in range(repeat[1] -1):
         x = torch.cat((x, x_1), 2)
-    pos = positional_encoding(repeat[1] * 7, 3)    
-    return x.transpose(1, 2) + pos
+    pos = positional_encoding(repeat[0],  21)    #(seq, feat)
+    return x + pos
 
 def positional_encoding(max_len, d_model):
     pos = torch.arange(max_len).unsqueeze(1)

@@ -119,11 +119,11 @@ class Node:
     def get_uct(self, Cp):
         if self.is_root and self.parent == None:
             return float('inf')
-        if self.n == 0 and len(self.bag) > 0:
-            return float('inf')
-        # coeff = 2 ** (5 - ceil(log2(self.id + 2))) 
-        if len(self.bag) == 0:
-            return 0
+        if self.n == 0:
+            if len(self.bag) > 0:
+                return float('inf')
+            else:
+                return -100
         # return self.x_bar + Cp*math.sqrt(2*math.log(self.parent.n)/self.n )
         return self.x_bar + 2 * Cp*math.sqrt(2*math.log(self.parent.counter)/self.counter)
         
@@ -147,13 +147,16 @@ class Node:
         else:
             if self.is_good_kid:
                 self.bag = self.parent.good_kid_data
-                self.classifier.update_samples(self.parent.good_kid_data, self.x_bar)
+                self.classifier.update_samples(self.bag, self.x_bar)
                 self.good_kid_data, self.bad_kid_data = self.classifier.split_data()
             else:
                 self.bag = self.parent.bad_kid_data
-                self.classifier.update_samples(self.parent.bad_kid_data, self.x_bar)
+                self.classifier.update_samples(self.bag, self.x_bar)
                 self.good_kid_data, self.bad_kid_data = self.classifier.split_data()
-        self.x_bar = np.mean(np.array(list(self.bag.values())))
+        if len(self.bag) > 0:
+            self.x_bar = np.mean(np.array(list(self.bag.values())))
+        else:
+            self.x_bar = 0
         self.n     = len(self.bag.values())
 
 
@@ -203,7 +206,8 @@ class Node:
     def sample_arch(self):
         if len(self.bag) == 0:
             return None
-        net_str = random.choice(list(self.bag.keys()))
+        # net_str = random.choice(list(self.bag.keys()))
+        net_str = list(self.bag.keys())[np.argmax(list(self.bag.values()))]     # net with lowest mae
         del self.bag[net_str]
         parent_node = self.parent
         for i in range(3):

@@ -20,6 +20,7 @@ files = os.listdir(state_path)
 
 file = files[-1]
 node_path = os.path.join(state_path, file)
+node_path = 'results/linear_stable/mcts_agent_2100'
 with open(node_path, 'rb') as json_data:
     agent = pickle.load(json_data)              
 agent.print_tree()
