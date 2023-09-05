@@ -19,7 +19,7 @@ class Node:
         self.is_good_kid   = is_good_kid
         self.ARCH_CODE_LEN = arch_code_len
         self.is_root       = is_root
-        self.x_bar         = float("inf")
+        self.x_bar         = -float("inf")
         self.n             = 0
         self.uct           = 0
         self.counter       = 1
