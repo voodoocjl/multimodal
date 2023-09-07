@@ -17,7 +17,7 @@ def get_label(energy, mean = None):
     if len(energy) == 0:
         return
     p_mean = energy.mean()
-    if mean and mean < p_mean:
+    if mean and mean > p_mean:
         energy_mean = mean
     else:
         energy_mean = p_mean
@@ -40,9 +40,9 @@ class Classifier:
         #     self.model        = Encoder(input_dim, self.hidden_dims[self.node_layer], 1)
         # else:
         #     self.model        = Enco_Conv_Net(4, 2)
-        # self.model            = Mlp(self.input_dim_2d, self.hidden_dims[self.node_layer], 2)
+        self.model            = Mlp(self.input_dim_2d, self.hidden_dims[self.node_layer], 2)
         # self.model           = Linear(21, 2) 
-        self.model            = Attention(21, 1, 2)  #input, hidden, output
+        # self.model            = Attention(21, 1, 2)  #input, hidden, output
         if torch.cuda.is_available():
             self.model.cuda()
         self.loss_fn          = nn.MSELoss()
