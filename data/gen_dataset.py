@@ -2,7 +2,7 @@ import csv
 import pickle
 import os
 
-name = 'mosi_test'  #'mosi_dataset'
+name = 'mosei_dataset'  #'mosi_dataset'
 dir_path = os.path.dirname(os.path.realpath(__file__))
 files = os.listdir(dir_path)
 dataset_file = os.path.join(dir_path, name)
@@ -20,8 +20,8 @@ for file in files:
         csv_reader = csv.reader(open(os.path.join(dir_path, file)))
         arch_code, energy = [], []
         for row in csv_reader:
-            arch_code.append(row[1])
-            energy.append(row[3])
+            arch_code.append(row[2])
+            energy.append(row[4])
         try:
             assert arch_code[0] == 'arch_code' and energy[0] == 'test_mae'
         except AssertionError:

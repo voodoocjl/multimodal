@@ -8,7 +8,7 @@ import os, json
 # print(len(search_space))
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-dataset_file = os.path.join(dir_path, 'mosi_test')
+dataset_file = os.path.join(dir_path, 'mosei_dataset')
 
 with open(dataset_file, 'rb') as file:
     dataset = pickle.load(file)
@@ -21,7 +21,7 @@ for arch, mae in dataset.items():
     if code not in search_space:
         search_space.append(code)
 
-with open('search_space_pretrain', 'wb') as file:
+with open('search_space_mosei', 'wb') as file:
     pickle.dump(search_space, file)
 
 # j = 0
